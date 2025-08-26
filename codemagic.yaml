@@ -67,15 +67,8 @@ workflows:
           echo "flutter.versionCode=$VERSION_CODE" >> $CM_BUILD_DIR/android/local.properties
       - name: Build APK
         script: |
-          # Pre-warm Gradle cache for faster builds
-          cd android && ./gradlew help --daemon
-          cd ..
-          
           # Build with maximum optimization flags
-          flutter build apk --release \
-            --no-tree-shake-icons \
-            --target-platform android-arm64 \
-            --split-per-abi
+          flutter build apk --release 
           
           # Check what files were generated
           echo "📁 APK files generated:"
