@@ -1,24 +1,10 @@
-# Flutter Code Magic - Codemagic CI/CD Configuration
-#
-# Required Environment Variables in Codemagic:
+# Codemagic YAML Configuration for Flutter Code Magic
+# This file defines CI/CD workflows for Android, iOS, and Web builds
 # 
-# Google Drive Integration:
-# - GOOGLE_DRIVE_SERVICE_ACCOUNT: Service account JSON for Google Drive API
-#   Service Account Email: edge-app-cicd@codemagic-470112.iam.gserviceaccount.com
-# - GOOGLE_DRIVE_FOLDER_ID: Google Drive folder ID where files will be uploaded
-#   Folder ID: 1GNT1C0eOcg0hgsxr6lqIKx-LwZK77BBF
-#
-# Slack Integration:
-# - SLACK_WEBHOOK_URL: Slack webhook URL for notifications
-#
-# Diawi Integration (iOS only):
-# - DIAWI_TOKEN: Diawi API token for iOS app distribution
-#
-# Android Signing:
-# - SKIPPED: Using debug signing for development builds
-#
-# iOS Signing:
-# - SKIPPED: Using --no-codesign for development builds
+# Required Environment Variables:
+# google_credentials group: GOOGLE_DRIVE_SERVICE_ACCOUNT, GOOGLE_DRIVE_FOLDER_ID
+# slack_credentials group: SLACK_WEBHOOK_URL  
+# diawi_credentials group: DIAWI_TOKEN
 
 workflows:
   # ANDROID BUILD WORKFLOW
@@ -265,7 +251,7 @@ EOF
           # Build iOS app without signing
           flutter build ios --release --no-codesign
           
-          # Create ipa directory
+          # Create IPA directory
           mkdir -p build/ios/ipa
           
           # Package the app as a simple zip (for distribution)
@@ -288,50 +274,49 @@ EOF
           curl -L https://github.com/gdrive-org/gdrive/releases/download/2.1.1/gdrive_2.1.1_darwin_amd64.tar.gz | tar xz
           sudo mv gdrive /usr/local/bin/
           
-          # Authenticate with service account
+          # Authenticate and upload
           echo "$GOOGLE_DRIVE_SERVICE_ACCOUNT" > service-account.json
           gdrive account add --service-account service-account.json
+          gdrive files upload "build/ios/ipa/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa" --parent "$GOOGLE_DRIVE_FOLDER_ID"
           
-          # Upload IPA and get file ID
-          echo "📤 Uploading IPA to Google Drive..."
-          UPLOAD_OUTPUT=$(gdrive files upload build/ios/ipa/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa --parent $GOOGLE_DRIVE_FOLDER_ID)
-          FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep "Uploaded" | awk '{print $2}')
-          DRIVE_LINK="https://drive.google.com/file/d/$FILE_ID/view"
-          echo "DRIVE_LINK=$DRIVE_LINK" >> $CM_ENV
-          echo "✅ IPA uploaded to Google Drive: $DRIVE_LINK"
+          echo "DRIVE_LINK=https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID" >> $CM_ENV
+
       - name: Upload to Diawi
         script: |
           # Check if Diawi is configured
           if [ -z "$DIAWI_TOKEN" ]; then
-            echo "⚠️ Diawi not configured, skipping upload"
-            echo "💡 To enable Diawi uploads, configure diawi_credentials environment group"
+            echo "⚠️ DIAWI_TOKEN not configured, skipping Diawi upload"
+            echo "💡 To enable Diawi uploads, add DIAWI_TOKEN to diawi_credentials environment group"
+            echo "DIAWI_LINK=Not_configured" >> $CM_ENV
             exit 0
           fi
           
           IPA_PATH="build/ios/ipa/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa"
           
-          # Upload to Diawi
-          echo "📤 Uploading IPA to Diawi..."
-          RESPONSE=$(curl -F "token=$DIAWI_TOKEN" \
+          DIAWI_RESPONSE=$(curl -X POST https://upload.diawi.com/ \
+                          -F "token=$DIAWI_TOKEN" \
                           -F "file=@$IPA_PATH" \
-                          -F "find_by_udid=1" \
-                          -F "wall_of_apps=1" \
-                          https://upload.diawi.com/)
+                          -F "wall_of_apps=1")
           
-          JOB_ID=$(echo $RESPONSE | grep -o '"job":"[^"]*' | cut -d'"' -f4)
-          echo "Diawi Job ID: $JOB_ID"
+          JOB_ID=$(echo "$DIAWI_RESPONSE" | grep -o '"job":"[^"]*"' | cut -d'"' -f4)
           
-          # Wait for upload to complete and get link
-          sleep 30
-          for i in {1..10}; do
-            STATUS_RESPONSE=$(curl -s https://upload.diawi.com/status?token=$DIAWI_TOKEN\&job=$JOB_ID)
-            if echo $STATUS_RESPONSE | grep -q '"status":2000'; then
-              DIAWI_LINK=$(echo $STATUS_RESPONSE | grep -o '"link":"[^"]*' | cut -d'"' -f4)
-              echo "DIAWI_LINK=$DIAWI_LINK" >> $CM_ENV
-              break
-            fi
+          if [ -n "$JOB_ID" ]; then
             sleep 10
-          done
+            STATUS_RESPONSE=$(curl -s "https://upload.diawi.com/status?token=$DIAWI_TOKEN&job=$JOB_ID")
+            DIAWI_LINK=$(echo "$STATUS_RESPONSE" | grep -o '"link":"[^"]*"' | cut -d'"' -f4)
+            
+            if [ -n "$DIAWI_LINK" ]; then
+              echo "DIAWI_LINK=https://i.diawi.com/$DIAWI_LINK" >> $CM_ENV
+              echo "✅ iOS app uploaded to Diawi: https://i.diawi.com/$DIAWI_LINK"
+            else
+              echo "DIAWI_LINK=Upload_failed" >> $CM_ENV
+              echo "❌ Failed to get Diawi link"
+            fi
+          else
+            echo "DIAWI_LINK=Upload_failed" >> $CM_ENV
+            echo "❌ Failed to upload to Diawi"
+          fi
+
       - name: Send Slack notification
         script: |
           # Check if Slack webhook is configured
@@ -345,12 +330,6 @@ EOF
           SIZE=$(stat -f%z "$IPA_PATH" 2>/dev/null || stat -c%s "$IPA_PATH" 2>/dev/null)
           SIZE_MB=$(($SIZE/1024/1024))
           
-          DIAWI_TEXT=""
-          if [ ! -z "$DIAWI_LINK" ]; then
-            DIAWI_TEXT="📲 *Diawi Link:* <$DIAWI_LINK|Install on Device>\\n"
-          fi
-          
-          echo "📤 Sending Slack notification..."
           curl -X POST -H 'Content-type: application/json' \
             --data "{
               \"text\": \"🚀 *Flutter Code Magic iOS Build Completed*\",
@@ -387,7 +366,7 @@ EOF
                   \"type\": \"section\",
                   \"text\": {
                     \"type\": \"mrkdwn\",
-                    \"text\": \"📁 *Google Drive:* ${DRIVE_LINK:-Not configured}\\n${DIAWI_TEXT}📱 *File:* flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa\"
+                    \"text\": \"📁 *Google Drive:* ${DRIVE_LINK:-Not configured}\\n📱 *Diawi:* ${DIAWI_LINK:-Not configured}\\n📱 *File:* flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa\"
                   }
                 }
               ]
@@ -448,6 +427,7 @@ EOF
           if [ -z "$GOOGLE_DRIVE_SERVICE_ACCOUNT" ] || [ -z "$GOOGLE_DRIVE_FOLDER_ID" ]; then
             echo "⚠️ Google Drive not configured, skipping upload"
             echo "💡 To enable Google Drive uploads, configure google_credentials environment group"
+            echo "DRIVE_LINK=Not_configured" >> $CM_ENV
             exit 0
           fi
           
@@ -455,13 +435,13 @@ EOF
           curl -L https://github.com/gdrive-org/gdrive/releases/download/2.1.1/gdrive_2.1.1_darwin_amd64.tar.gz | tar xz
           sudo mv gdrive /usr/local/bin/
           
-          # Authenticate with service account
+          # Authenticate and upload
           echo "$GOOGLE_DRIVE_SERVICE_ACCOUNT" > service-account.json
           gdrive account add --service-account service-account.json
+          gdrive files upload "build/flutter_code_magic_web_v${VERSION_NAME}+${VERSION_CODE}.tar.gz" --parent "$GOOGLE_DRIVE_FOLDER_ID"
           
-          # Upload Web build
-          echo "📤 Uploading Web build to Google Drive..."
-          gdrive files upload build/flutter_code_magic_web_v${VERSION_NAME}+${VERSION_CODE}.tar.gz --parent $GOOGLE_DRIVE_FOLDER_ID
+          echo "DRIVE_LINK=https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID" >> $CM_ENV
+
       - name: Send Slack notification
         script: |
           # Check if Slack webhook is configured
@@ -475,7 +455,6 @@ EOF
           SIZE=$(stat -f%z "$WEB_PATH" 2>/dev/null || stat -c%s "$WEB_PATH" 2>/dev/null)
           SIZE_MB=$(($SIZE/1024/1024))
           
-          echo "📤 Sending Slack notification..."
           curl -X POST -H 'Content-type: application/json' \
             --data "{
               \"text\": \"🚀 *Flutter Code Magic Web Build Completed*\",
@@ -512,7 +491,7 @@ EOF
                   \"type\": \"section\",
                   \"text\": {
                     \"type\": \"mrkdwn\",
-                    \"text\": \"📁 *Google Drive:* Web build uploaded successfully\\n🌐 *File:* flutter_code_magic_web_v${VERSION_NAME}+${VERSION_CODE}.tar.gz\"
+                    \"text\": \"📁 *Google Drive:* ${DRIVE_LINK:-Not configured}\\n📱 *File:* flutter_code_magic_web_v${VERSION_NAME}+${VERSION_CODE}.tar.gz\"
                   }
                 }
               ]
@@ -560,21 +539,20 @@ EOF
           echo "flutter.versionCode=$VERSION_CODE" >> $CM_BUILD_DIR/android/local.properties
           
           # Build unsigned release APK
-          flutter build apk --release --no-shrink
-          
+          flutter build apk --release
           cd build/app/outputs/flutter-apk
           mv app-release.apk flutter_code_magic_android_v${VERSION_NAME}+${VERSION_CODE}.apk
+          cd ../../../..
       - name: Build iOS
         script: |
           cd ios && pod install && cd ..
-          
-          # Build iOS app without signing
           flutter build ios --release --no-codesign
           
-          # Create ipa directory and package
+          # Create IPA directory and package
           mkdir -p build/ios/ipa
           cd build/ios/Release-iphoneos/
           zip -r ../ipa/flutter_code_magic_ios_v${VERSION_NAME}+${VERSION_CODE}.ipa Runner.app
+          cd ../../../..
       - name: Build Web
         script: |
           flutter build web --release
