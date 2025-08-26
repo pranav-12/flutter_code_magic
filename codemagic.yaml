@@ -1,7 +1,7 @@
 # Codemagic Configuration for Flutter Code Magic
 # Documentation: https://docs.codemagic.io/
 #
-# 📋 CREDENTIALS: See CREDENTIALS_CHECKLIST.md for all required environment variables
+# 📋 CREDENTIALS: See CREDENTIALS_CHECKLIST.md for all required environment variables\
 # 🔧 SETUP: Configure environment groups in Codemagic dashboard before running builds
 
 workflows:
@@ -54,14 +54,7 @@ workflows:
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
     publishing:
-      # OFFICIAL CODEMAGIC SLACK INTEGRATION
-      slack:
-        channel: '#general'  # Replace with your channel
-        notify_on_build_start: true
-        notify:
-          success: true
-          failure: true
-      # CUSTOM GOOGLE DRIVE UPLOAD SCRIPT
+      # CUSTOM SCRIPTS FOR GOOGLE DRIVE AND SLACK
       scripts:
         - name: Upload to Google Drive
           script: |
@@ -104,6 +97,61 @@ workflows:
             else
               echo "DRIVE_LINK=https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID" >> $CM_ENV
               echo "✅ Android ZIP uploaded (using folder link)"
+            fi
+        - name: Send Slack notification
+          script: |
+            if [ -z "$SLACK_WEBHOOK_URL" ]; then
+              echo "⚠️ SLACK_WEBHOOK_URL not configured, skipping Slack notification"
+              exit 0
+            fi
+            
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{
+                \"text\": \"🚀 Flutter Code Magic Android Build Completed\",
+                \"blocks\": [
+                  {
+                    \"type\": \"header\",
+                    \"text\": {
+                      \"type\": \"plain_text\",
+                      \"text\": \"📱 Flutter Code Magic Android v${VERSION_NAME}+${VERSION_CODE}\"
+                    }
+                  },
+                  {
+                    \"type\": \"section\",
+                    \"fields\": [
+                      {
+                        \"type\": \"mrkdwn\",
+                        \"text\": \"*Platform:* Android\"
+                      },
+                      {
+                        \"type\": \"mrkdwn\",
+                        \"text\": \"*Version:* ${VERSION_NAME}+${VERSION_CODE}\"
+                      },
+                      {
+                        \"type\": \"mrkdwn\",
+                        \"text\": \"*Branch:* ${CM_BRANCH}\"
+                      },
+                      {
+                        \"type\": \"mrkdwn\",
+                        \"text\": \"*Status:* ✅ Success\"
+                      }
+                    ]
+                  },
+                  {
+                    \"type\": \"section\",
+                    \"text\": {
+                      \"type\": \"mrkdwn\",
+                      \"text\": \"📥 *Download Links:*\\n• 📦 *Google Drive:* ${DRIVE_LINK}\\n• 📱 *APK File:* flutter_code_magic_android_v${VERSION_NAME}+${VERSION_CODE}.zip\"
+                    }
+                  }
+                ]
+              }" \
+              "$SLACK_WEBHOOK_URL"
+            
+            if [ $? -eq 0 ]; then
+              echo "✅ Slack notification sent successfully"
+            else
+              echo "❌ Failed to send Slack notification"
             fi
 
   # iOS BUILD WORKFLOW  
@@ -153,14 +201,7 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
     publishing:
-      # OFFICIAL CODEMAGIC SLACK INTEGRATION
-      slack:
-        channel: '#general'
-        notify_on_build_start: true
-        notify:
-          success: true
-          failure: true
-      # CUSTOM SCRIPTS FOR GOOGLE DRIVE AND DIAWI
+      # CUSTOM SCRIPTS FOR GOOGLE DRIVE, DIAWI AND SLACK
       scripts:
         - name: Upload to Google Drive
           script: |
@@ -227,11 +268,69 @@ workflows:
               LINK=$(echo "$STATUS" | grep -o '"link":"[^"]*"' | cut -d'"' -f4)
               
               if [ -n "$LINK" ]; then
+                echo "DIAWI_LINK=https://i.diawi.com/$LINK" >> $CM_ENV
                 echo "✅ Diawi link: https://i.diawi.com/$LINK"
               else
+                echo "DIAWI_LINK=Upload_failed" >> $CM_ENV
                 echo "❌ Failed to get Diawi link"
               fi
             else
+              echo "DIAWI_LINK=Upload_failed" >> $CM_ENV
               echo "❌ Failed to upload to Diawi"
+            fi
+        - name: Send Slack notification
+          script: |
+            if [ -z "$SLACK_WEBHOOK_URL" ]; then
+              echo "⚠️ SLACK_WEBHOOK_URL not configured, skipping Slack notification"
+              exit 0
+            fi
+            
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{
+                \"text\": \"🚀 Flutter Code Magic iOS Build Completed\",
+                \"blocks\": [
+                  {
+                    \"type\": \"header\",
+                    \"text\": {
+                      \"type\": \"plain_text\",
+                      \"text\": \"📱 Flutter Code Magic iOS v${VERSION_NAME}+${VERSION_CODE}\"
+                    }
+                  },
+                  {
+                    \"type\": \"section\",
+                    \"fields\": [
+                      {
+                        \"type\": \"mrkdwn\",
+                        \"text\": \"*Platform:* iOS\"
+                      },
+                      {
+                        \"type\": \"mrkdwn\",
+                        \"text\": \"*Version:* ${VERSION_NAME}+${VERSION_CODE}\"
+                      },
+                      {
+                        \"type\": \"mrkdwn\",
+                        \"text\": \"*Branch:* ${CM_BRANCH}\"
+                      },
+                      {
+                        \"type\": \"mrkdwn\",
+                        \"text\": \"*Status:* ✅ Success\"
+                      }
+                    ]
+                  },
+                  {
+                    \"type\": \"section\",
+                    \"text\": {
+                      \"type\": \"mrkdwn\",
+                      \"text\": \"📥 *Download Links:*\\n• 📦 *Google Drive:* ${DRIVE_LINK}\\n• 📱 *Diawi:* ${DIAWI_LINK:-Not available}\\n• 🗂️ *IPA File:* flutter_code_magic_ios_v${VERSION_NAME}+${VERSION_CODE}.zip\"
+                    }
+                  }
+                ]
+              }" \
+              "$SLACK_WEBHOOK_URL"
+            
+            if [ $? -eq 0 ]; then
+              echo "✅ Slack notification sent successfully"
+            else
+              echo "❌ Failed to send Slack notification"
             fi
 
