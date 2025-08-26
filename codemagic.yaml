@@ -77,9 +77,33 @@ workflows:
             --target-platform android-arm64 \
             --split-per-abi
           
+          # Check what files were generated
+          echo "📁 APK files generated:"
+          ls -la build/app/outputs/flutter-apk/
+          
           # Use the arm64 APK (smallest and fastest)
           cd build/app/outputs/flutter-apk
-          mv app-arm64-v8a-release.apk flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk
+          
+          # Check if the expected file exists
+          if [ -f "app-arm64-v8a-release.apk" ]; then
+            mv app-arm64-v8a-release.apk flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk
+            echo "✅ APK renamed to: flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk"
+          else
+            echo "❌ app-arm64-v8a-release.apk not found!"
+            echo "Available files:"
+            ls -la
+            # Try to use any available APK
+            if [ -f "app-release.apk" ]; then
+              mv app-release.apk flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk
+              echo "✅ Using app-release.apk instead"
+            else
+              echo "❌ No APK files found!"
+              exit 1
+            fi
+          fi
+          
+          # Go back to project root
+          cd ../../../..
       - name: Upload to Google Drive
         script: |
           # Check if Google Drive is configured
@@ -90,16 +114,42 @@ workflows:
             exit 0
           fi
           
+          # Debug: Check what files exist
+          echo "📁 Checking APK files..."
+          ls -la build/app/outputs/flutter-apk/
+          
+          APK_FILE="flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk"
+          APK_PATH="build/app/outputs/flutter-apk/$APK_FILE"
+          
+          if [ ! -f "$APK_PATH" ]; then
+            echo "❌ APK file not found: $APK_PATH"
+            exit 1
+          fi
+          
+          echo "✅ Found APK: $APK_PATH"
+          
           # Install gdrive CLI tool
           curl -L https://github.com/gdrive-org/gdrive/releases/download/2.1.1/gdrive_2.1.1_darwin_amd64.tar.gz | tar xz
           sudo mv gdrive /usr/local/bin/
+          chmod +x /usr/local/bin/gdrive
           
           # Authenticate and upload
           echo "$GOOGLE_DRIVE_SERVICE_ACCOUNT" > service-account.json
           gdrive account add --service-account service-account.json
-          gdrive files upload "build/app/outputs/flutter-apk/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk" --parent "$GOOGLE_DRIVE_FOLDER_ID"
           
-          echo "DRIVE_LINK=https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID" >> $CM_ENV
+          echo "📤 Uploading $APK_FILE to Google Drive..."
+          UPLOAD_OUTPUT=$(gdrive files upload "$APK_PATH" --parent "$GOOGLE_DRIVE_FOLDER_ID" 2>&1)
+          echo "Upload output: $UPLOAD_OUTPUT"
+          
+          # Extract file ID from upload output and create download link
+          FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep -o 'Id: [^[:space:]]*' | cut -d' ' -f2 | head -1)
+          if [ -n "$FILE_ID" ]; then
+            echo "DRIVE_LINK=https://drive.google.com/file/d/$FILE_ID/view" >> $CM_ENV
+            echo "✅ APK uploaded successfully: $FILE_ID"
+          else
+            echo "DRIVE_LINK=https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID" >> $CM_ENV
+            echo "✅ APK uploaded (using folder link as fallback)"
+          fi
       - name: Send Slack notification
         script: |
           # Check if Slack webhook is configured
@@ -110,51 +160,67 @@ workflows:
           fi
           
           APK_PATH="build/app/outputs/flutter-apk/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk"
-          SIZE=$(stat -f%z "$APK_PATH" 2>/dev/null || stat -c%s "$APK_PATH" 2>/dev/null)
-          SIZE_MB=$(($SIZE/1024/1024))
+          if [ -f "$APK_PATH" ]; then
+            SIZE=$(stat -f%z "$APK_PATH" 2>/dev/null || stat -c%s "$APK_PATH" 2>/dev/null)
+            SIZE_MB=$(($SIZE/1024/1024))
+          else
+            SIZE_MB="Unknown"
+          fi
           
+          # Create JSON payload in a file to avoid shell escaping issues
+          cat > slack_payload.json << EOF
+{
+  "text": "🚀 Flutter Code Magic Android Build Completed",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "📱 Flutter Code Magic Android v${VERSION_NAME}+${VERSION_CODE}"
+      }
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*Platform:* Android"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Version:* ${VERSION_NAME}+${VERSION_CODE}"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Size:* ${SIZE_MB}MB"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Branch:* ${CM_BRANCH}"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "📁 *Google Drive:* ${DRIVE_LINK:-Not configured}\\n📱 *File:* flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk"
+      }
+    }
+  ]
+}
+EOF
+          
+          echo "📤 Sending Slack notification..."
           curl -X POST -H 'Content-type: application/json' \
-            --data "{
-              \"text\": \"🚀 *Flutter Code Magic Android Build Completed*\",
-              \"blocks\": [
-                {
-                  \"type\": \"header\",
-                  \"text\": {
-                    \"type\": \"plain_text\",
-                    \"text\": \"📱 Flutter Code Magic Android v${VERSION_NAME}+${VERSION_CODE}\"
-                  }
-                },
-                {
-                  \"type\": \"section\",
-                  \"fields\": [
-                    {
-                      \"type\": \"mrkdwn\",
-                      \"text\": \"*Platform:* Android\"
-                    },
-                    {
-                      \"type\": \"mrkdwn\",
-                      \"text\": \"*Version:* ${VERSION_NAME}+${VERSION_CODE}\"
-                    },
-                    {
-                      \"type\": \"mrkdwn\",
-                      \"text\": \"*Size:* ${SIZE_MB}MB\"
-                    },
-                    {
-                      \"type\": \"mrkdwn\",
-                      \"text\": \"*Branch:* $CM_BRANCH\"
-                    }
-                  ]
-                },
-                {
-                  \"type\": \"section\",
-                  \"text\": {
-                    \"type\": \"mrkdwn\",
-                    \"text\": \"📁 *Google Drive:* ${DRIVE_LINK:-Not configured}\\n📱 *File:* flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk\"
-                  }
-                }
-              ]
-            }" \
+            --data @slack_payload.json \
             "$SLACK_WEBHOOK_URL"
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Slack notification sent successfully"
+          else
+            echo "❌ Failed to send Slack notification"
+          fi
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
 
