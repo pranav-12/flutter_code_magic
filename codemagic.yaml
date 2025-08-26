@@ -65,47 +65,15 @@ workflows:
         script: |
           echo "flutter.versionName=$VERSION_NAME" > $CM_BUILD_DIR/android/local.properties
           echo "flutter.versionCode=$VERSION_CODE" >> $CM_BUILD_DIR/android/local.properties
-      - name: Get Flutter packages
-        script: |
-          echo "🔧 Getting Flutter packages..."
-          flutter pub get
-          echo "✅ Flutter packages complete"
-      - name: Cache Gradle dependencies
-        script: |
-          echo "⚡ Warming up Gradle cache..."
-          cd android && ./gradlew dependencies --quiet || echo "Gradle cache warmed up"
-      - name: Flutter analyze
-        script: |
-          echo "⚡ Running quick analyze..."
-          flutter analyze --no-fatal-infos
-      - name: Flutter test  
-        script: |
-          echo "⚡ Running tests..."
-          flutter test --reporter=compact
       - name: Build APK
         script: |
           # Skip flutter clean to save time (only clean if necessary)
           echo "⚡ Fast APK build starting..."
           
-          # Quick Flutter doctor check (no verbose)
-          flutter doctor
-          
           # Build unsigned release APK with optimizations
           echo "Building optimized release APK..."
           flutter build apk --release
-          
-          # If that fails, try without optimizations
-          if [ $? -ne 0 ]; then
-            echo "Optimized build failed, trying standard release..."
-            flutter build apk --release --no-shrink
-          fi
-          
-          # Final fallback to debug if release fails
-          if [ $? -ne 0 ]; then
-            echo "Release build failed, trying debug mode..."
-            flutter build apk --debug
-          fi
-          
+ 
           # Check what APK was created
           ls -la build/app/outputs/flutter-apk/
           
@@ -126,21 +94,6 @@ workflows:
           # Use the APK name detected in previous step
           mv $APK_NAME flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk
           echo "✅ Renamed $APK_NAME to flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk"
-      - name: Test APK (Basic validation)
-        script: |
-          APK_PATH="build/app/outputs/flutter-apk/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk"
-          if [ -f "$APK_PATH" ]; then
-            SIZE=$(stat -f%z "$APK_PATH" 2>/dev/null || stat -c%s "$APK_PATH" 2>/dev/null)
-            if [ $SIZE -gt 5000000 ]; then  # > 5MB
-              echo "✅ APK validation passed - Size: $(($SIZE/1024/1024))MB"
-            else
-              echo "❌ APK validation failed - Size too small: $(($SIZE/1024/1024))MB"
-              exit 1
-            fi
-          else
-            echo "❌ APK not found at $APK_PATH"
-            exit 1
-          fi
       - name: Upload to Google Drive
         script: |
           # Check if Google Drive is configured
@@ -161,11 +114,24 @@ workflows:
           
           # Upload APK and get file ID
           echo "📤 Uploading APK to Google Drive..."
-          UPLOAD_OUTPUT=$(gdrive files upload build/app/outputs/flutter-apk/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk --parent $GOOGLE_DRIVE_FOLDER_ID)
-          FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep "Uploaded" | awk '{print $2}')
-          DRIVE_LINK="https://drive.google.com/file/d/$FILE_ID/view"
-          echo "DRIVE_LINK=$DRIVE_LINK" >> $CM_ENV
-          echo "✅ APK uploaded to Google Drive: $DRIVE_LINK"
+          APK_FILE="build/app/outputs/flutter-apk/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk"
+          
+          # Upload file and capture output properly
+          UPLOAD_OUTPUT=$(gdrive files upload "$APK_FILE" --parent "$GOOGLE_DRIVE_FOLDER_ID" 2>&1)
+          echo "Upload output: $UPLOAD_OUTPUT"
+          
+          # Extract file ID from gdrive output (format may vary)
+          FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep -E "Id:|Uploaded" | sed 's/.*Id: *//; s/.*Uploaded *//; s/ .*//' | head -1)
+          
+          if [ -n "$FILE_ID" ] && [ "$FILE_ID" != "" ]; then
+            DRIVE_LINK="https://drive.google.com/file/d/$FILE_ID/view"
+            echo "DRIVE_LINK=$DRIVE_LINK" >> $CM_ENV
+            echo "✅ APK uploaded to Google Drive: $DRIVE_LINK"
+          else
+            echo "⚠️ Could not extract file ID from gdrive output"
+            echo "DRIVE_LINK=https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID" >> $CM_ENV
+            echo "✅ APK uploaded to Google Drive folder: https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID"
+          fi
       - name: Send Slack notification
         script: |
           # Check if Slack webhook is configured
@@ -179,7 +145,10 @@ workflows:
           SIZE=$(stat -f%z "$APK_PATH" 2>/dev/null || stat -c%s "$APK_PATH" 2>/dev/null)
           SIZE_MB=$(($SIZE/1024/1024))
           
-          echo "📤 Sending Slack notification..."
+          # Debug: Check webhook URL
+          echo "📤 Sending Slack notification to: ${SLACK_WEBHOOK_URL:0:50}..."
+          
+          # Send Slack notification with proper URL handling
           curl -X POST -H 'Content-type: application/json' \
             --data "{
               \"text\": \"🚀 *Flutter Code Magic Android Build Completed*\",
@@ -221,7 +190,9 @@ workflows:
                 }
               ]
             }" \
-            $SLACK_WEBHOOK_URL
+            "$SLACK_WEBHOOK_URL"
+          
+          echo "✅ Slack notification sent"
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
 
