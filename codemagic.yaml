@@ -92,11 +92,11 @@ workflows:
           # Check Flutter doctor
           flutter doctor -v
           
-          # Try building APK with release mode but debug signing
-          echo "Building APK..."
-          flutter build apk --release --debug
+          # Build unsigned release APK (no signing required)
+          echo "Building unsigned release APK..."
+          flutter build apk --release --no-shrink
           
-          # If that fails, try debug mode
+          # If that fails, try debug mode as fallback
           if [ $? -ne 0 ]; then
             echo "Release build failed, trying debug mode..."
             flutter build apk --debug
@@ -248,7 +248,9 @@ workflows:
           echo "📦 Building version: $VERSION_NAME+$VERSION_CODE"
       - name: Get Flutter packages
         script: |
-          flutter packages pub get
+          echo "🔧 Getting Flutter packages..."
+          flutter pub get
+          echo "✅ Flutter packages complete"
       - name: Install CocoaPods dependencies
         script: |
           cd ios && pod install
@@ -260,12 +262,17 @@ workflows:
           flutter test
       - name: Build iOS
         script: |
+          # Build iOS app without signing
           flutter build ios --release --no-codesign
-          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release -archivePath build/ios/Runner.xcarchive archive CODE_SIGNING_ALLOWED=NO
-      - name: Package IPA
-        script: |
-          xcodebuild -exportArchive -archivePath build/ios/Runner.xcarchive -exportOptionsPlist ios/ExportOptions.plist -exportPath build/ios/ipa
-          mv build/ios/ipa/Runner.ipa build/ios/ipa/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa
+          
+          # Create ipa directory
+          mkdir -p build/ios/ipa
+          
+          # Package the app as a simple zip (for distribution)
+          cd build/ios/Release-iphoneos/
+          zip -r ../ipa/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa Runner.app
+          
+          echo "✅ iOS app packaged as IPA"
       - name: Test IPA (Basic validation)
         script: |
           IPA_PATH="build/ios/ipa/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa"
@@ -418,7 +425,9 @@ workflows:
           echo "📦 Building version: $VERSION_NAME+$VERSION_CODE"
       - name: Get Flutter packages
         script: |
-          flutter packages pub get
+          echo "🔧 Getting Flutter packages..."
+          flutter pub get
+          echo "✅ Flutter packages complete"
       - name: Flutter analyze
         script: |
           flutter analyze
@@ -544,7 +553,9 @@ workflows:
           echo "📦 Building all platforms for version: $VERSION_NAME+$VERSION_CODE"
       - name: Get Flutter packages
         script: |
-          flutter packages pub get
+          echo "🔧 Getting Flutter packages..."
+          flutter pub get
+          echo "✅ Flutter packages complete"
       - name: Flutter analyze
         script: |
           flutter analyze
@@ -555,16 +566,23 @@ workflows:
         script: |
           echo "flutter.versionName=$VERSION_NAME" > $CM_BUILD_DIR/android/local.properties
           echo "flutter.versionCode=$VERSION_CODE" >> $CM_BUILD_DIR/android/local.properties
-          flutter build apk --release
+          
+          # Build unsigned release APK
+          flutter build apk --release --no-shrink
+          
           cd build/app/outputs/flutter-apk
           mv app-release.apk flutter_code_magic_android_v${VERSION_NAME}+${VERSION_CODE}.apk
       - name: Build iOS
         script: |
           cd ios && pod install && cd ..
+          
+          # Build iOS app without signing
           flutter build ios --release --no-codesign
-          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release -archivePath build/ios/Runner.xcarchive archive CODE_SIGNING_ALLOWED=NO
-          xcodebuild -exportArchive -archivePath build/ios/Runner.xcarchive -exportOptionsPlist ios/ExportOptions.plist -exportPath build/ios/ipa
-          mv build/ios/ipa/Runner.ipa build/ios/ipa/flutter_code_magic_ios_v${VERSION_NAME}+${VERSION_CODE}.ipa
+          
+          # Create ipa directory and package
+          mkdir -p build/ios/ipa
+          cd build/ios/Release-iphoneos/
+          zip -r ../ipa/flutter_code_magic_ios_v${VERSION_NAME}+${VERSION_CODE}.ipa Runner.app
       - name: Build Web
         script: |
           flutter build web --release
