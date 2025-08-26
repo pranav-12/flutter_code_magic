@@ -72,17 +72,36 @@ workflows:
             
             APK_FILE="flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk"
             APK_PATH="build/app/outputs/flutter-apk/$APK_FILE"
+            ZIP_FILE="flutter_code_magic_android_v${VERSION_NAME}+${VERSION_CODE}.zip"
+            
+            # Create ZIP file with APK
+            echo "📦 Creating ZIP file..."
+            cd build/app/outputs/flutter-apk
+            zip "../../../$ZIP_FILE" "$APK_FILE"
+            cd ../../../..
             
             # Install gdrive tool
             curl -L https://github.com/gdrive-org/gdrive/releases/download/2.1.1/gdrive_2.1.1_darwin_amd64.tar.gz | tar xz
             sudo mv gdrive /usr/local/bin/
             chmod +x /usr/local/bin/gdrive
             
-            # Upload to Google Drive
+            # Upload ZIP to Google Drive
             echo "$GOOGLE_DRIVE_SERVICE_ACCOUNT" > service-account.json
             gdrive account add --service-account service-account.json
-            gdrive files upload "$APK_PATH" --parent "$GOOGLE_DRIVE_FOLDER_ID"
-            echo "✅ APK uploaded to Google Drive"
+            
+            echo "📤 Uploading $ZIP_FILE to Google Drive..."
+            UPLOAD_OUTPUT=$(gdrive files upload "$ZIP_FILE" --parent "$GOOGLE_DRIVE_FOLDER_ID" 2>&1)
+            echo "Upload result: $UPLOAD_OUTPUT"
+            
+            # Extract file ID for direct download link
+            FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep -o 'Id: [^[:space:]]*' | cut -d' ' -f2 | head -1)
+            if [ -n "$FILE_ID" ]; then
+              echo "DRIVE_LINK=https://drive.google.com/file/d/$FILE_ID/view" >> $CM_ENV
+              echo "✅ Android ZIP uploaded: $FILE_ID"
+            else
+              echo "DRIVE_LINK=https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID" >> $CM_ENV
+              echo "✅ Android ZIP uploaded (using folder link)"
+            fi
 
   # iOS BUILD WORKFLOW  
   ios-workflow:
@@ -149,17 +168,36 @@ workflows:
             
             IPA_FILE="flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa"
             IPA_PATH="build/ios/ipa/$IPA_FILE"
+            ZIP_FILE="flutter_code_magic_ios_v${VERSION_NAME}+${VERSION_CODE}.zip"
+            
+            # Create ZIP file with IPA
+            echo "📦 Creating ZIP file..."
+            cd build/ios/ipa
+            zip "../../$ZIP_FILE" "$IPA_FILE"
+            cd ../../..
             
             # Install gdrive tool
             curl -L https://github.com/gdrive-org/gdrive/releases/download/2.1.1/gdrive_2.1.1_darwin_amd64.tar.gz | tar xz
             sudo mv gdrive /usr/local/bin/
             chmod +x /usr/local/bin/gdrive
             
-            # Upload to Google Drive
+            # Upload ZIP to Google Drive
             echo "$GOOGLE_DRIVE_SERVICE_ACCOUNT" > service-account.json
             gdrive account add --service-account service-account.json
-            gdrive files upload "$IPA_PATH" --parent "$GOOGLE_DRIVE_FOLDER_ID"
-            echo "✅ IPA uploaded to Google Drive"
+            
+            echo "📤 Uploading $ZIP_FILE to Google Drive..."
+            UPLOAD_OUTPUT=$(gdrive files upload "$ZIP_FILE" --parent "$GOOGLE_DRIVE_FOLDER_ID" 2>&1)
+            echo "Upload result: $UPLOAD_OUTPUT"
+            
+            # Extract file ID for direct download link
+            FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep -o 'Id: [^[:space:]]*' | cut -d' ' -f2 | head -1)
+            if [ -n "$FILE_ID" ]; then
+              echo "DRIVE_LINK=https://drive.google.com/file/d/$FILE_ID/view" >> $CM_ENV
+              echo "✅ iOS ZIP uploaded: $FILE_ID"
+            else
+              echo "DRIVE_LINK=https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID" >> $CM_ENV
+              echo "✅ iOS ZIP uploaded (using folder link)"
+            fi
         - name: Upload to Diawi
           script: |
             if [ -z "$DIAWI_TOKEN" ]; then
@@ -251,14 +289,33 @@ workflows:
             
             WEB_FILE="flutter_code_magic_web_v${VERSION_NAME}+${VERSION_CODE}.tar.gz"
             WEB_PATH="build/$WEB_FILE"
+            ZIP_FILE="flutter_code_magic_web_v${VERSION_NAME}+${VERSION_CODE}.zip"
+            
+            # Create ZIP file with web build
+            echo "📦 Creating ZIP file..."
+            cd build
+            zip "$ZIP_FILE" "$WEB_FILE"
+            cd ..
             
             # Install gdrive tool
             curl -L https://github.com/gdrive-org/gdrive/releases/download/2.1.1/gdrive_2.1.1_darwin_amd64.tar.gz | tar xz
             sudo mv gdrive /usr/local/bin/
             chmod +x /usr/local/bin/gdrive
             
-            # Upload to Google Drive
+            # Upload ZIP to Google Drive
             echo "$GOOGLE_DRIVE_SERVICE_ACCOUNT" > service-account.json
             gdrive account add --service-account service-account.json
-            gdrive files upload "$WEB_PATH" --parent "$GOOGLE_DRIVE_FOLDER_ID"
-            echo "✅ Web build uploaded to Google Drive"
+            
+            echo "📤 Uploading build/$ZIP_FILE to Google Drive..."
+            UPLOAD_OUTPUT=$(gdrive files upload "build/$ZIP_FILE" --parent "$GOOGLE_DRIVE_FOLDER_ID" 2>&1)
+            echo "Upload result: $UPLOAD_OUTPUT"
+            
+            # Extract file ID for direct download link
+            FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep -o 'Id: [^[:space:]]*' | cut -d' ' -f2 | head -1)
+            if [ -n "$FILE_ID" ]; then
+              echo "DRIVE_LINK=https://drive.google.com/file/d/$FILE_ID/view" >> $CM_ENV
+              echo "✅ Web ZIP uploaded: $FILE_ID"
+            else
+              echo "DRIVE_LINK=https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID" >> $CM_ENV
+              echo "✅ Web ZIP uploaded (using folder link)"
+            fi
