@@ -311,6 +311,14 @@ workflows:
           fi
       - name: Upload to Google Drive
         script: |
+          # Check if Google Drive is configured
+          if [ -z "$GOOGLE_DRIVE_SERVICE_ACCOUNT" ] || [ -z "$GOOGLE_DRIVE_FOLDER_ID" ]; then
+            echo "⚠️ Google Drive not configured, skipping upload"
+            echo "💡 To enable Google Drive uploads, configure google_credentials environment group"
+            echo "DRIVE_LINK=Not_configured" >> $CM_ENV
+            exit 0
+          fi
+          
           # Install gdrive CLI tool
           curl -L https://github.com/gdrive-org/gdrive/releases/download/2.1.1/gdrive_2.1.1_darwin_amd64.tar.gz | tar xz
           sudo mv gdrive /usr/local/bin/
@@ -320,6 +328,7 @@ workflows:
           gdrive account add --service-account service-account.json
           
           # Upload IPA and get file ID
+          echo "📤 Uploading IPA to Google Drive..."
           UPLOAD_OUTPUT=$(gdrive files upload build/ios/ipa/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa --parent $GOOGLE_DRIVE_FOLDER_ID)
           FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep "Uploaded" | awk '{print $2}')
           DRIVE_LINK="https://drive.google.com/file/d/$FILE_ID/view"
@@ -327,9 +336,17 @@ workflows:
           echo "✅ IPA uploaded to Google Drive: $DRIVE_LINK"
       - name: Upload to Diawi
         script: |
+          # Check if Diawi is configured
+          if [ -z "$DIAWI_TOKEN" ]; then
+            echo "⚠️ Diawi not configured, skipping upload"
+            echo "💡 To enable Diawi uploads, configure diawi_credentials environment group"
+            exit 0
+          fi
+          
           IPA_PATH="build/ios/ipa/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa"
           
           # Upload to Diawi
+          echo "📤 Uploading IPA to Diawi..."
           RESPONSE=$(curl -F "token=$DIAWI_TOKEN" \
                           -F "file=@$IPA_PATH" \
                           -F "find_by_udid=1" \
@@ -405,7 +422,7 @@ workflows:
                   \"type\": \"section\",
                   \"text\": {
                     \"type\": \"mrkdwn\",
-                    \"text\": \"📁 *Google Drive:* <$DRIVE_LINK|Download IPA>\\n${DIAWI_TEXT}📱 *File:* flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa\"
+                    \"text\": \"📁 *Google Drive:* ${DRIVE_LINK:-Not configured}\\n${DIAWI_TEXT}📱 *File:* flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa\"
                   }
                 }
               ]
@@ -487,14 +504,23 @@ workflows:
           fi
       - name: Upload to Google Drive
         script: |
+          # Check if Google Drive is configured
+          if [ -z "$GOOGLE_DRIVE_SERVICE_ACCOUNT" ] || [ -z "$GOOGLE_DRIVE_FOLDER_ID" ]; then
+            echo "⚠️ Google Drive not configured, skipping upload"
+            echo "💡 To enable Google Drive uploads, configure google_credentials environment group"
+            exit 0
+          fi
+          
           # Install gdrive CLI tool
           curl -L https://github.com/gdrive-org/gdrive/releases/download/2.1.1/gdrive_2.1.1_darwin_amd64.tar.gz | tar xz
           sudo mv gdrive /usr/local/bin/
+          
           # Authenticate with service account
           echo "$GOOGLE_DRIVE_SERVICE_ACCOUNT" > service-account.json
           gdrive account add --service-account service-account.json
           
           # Upload Web build
+          echo "📤 Uploading Web build to Google Drive..."
           gdrive files upload build/flutter_code_magic_web_v${VERSION_NAME}+${VERSION_CODE}.tar.gz --parent $GOOGLE_DRIVE_FOLDER_ID
       - name: Send Slack notification
         script: |
