@@ -143,6 +143,14 @@ workflows:
           fi
       - name: Upload to Google Drive
         script: |
+          # Check if Google Drive is configured
+          if [ -z "$GOOGLE_DRIVE_SERVICE_ACCOUNT" ] || [ -z "$GOOGLE_DRIVE_FOLDER_ID" ]; then
+            echo "⚠️ Google Drive not configured, skipping upload"
+            echo "💡 To enable Google Drive uploads, configure google_credentials environment group"
+            echo "DRIVE_LINK=Not_configured" >> $CM_ENV
+            exit 0
+          fi
+          
           # Install gdrive CLI tool
           curl -L https://github.com/gdrive-org/gdrive/releases/download/2.1.1/gdrive_2.1.1_darwin_amd64.tar.gz | tar xz
           sudo mv gdrive /usr/local/bin/
@@ -152,6 +160,7 @@ workflows:
           gdrive account add --service-account service-account.json
           
           # Upload APK and get file ID
+          echo "📤 Uploading APK to Google Drive..."
           UPLOAD_OUTPUT=$(gdrive files upload build/app/outputs/flutter-apk/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk --parent $GOOGLE_DRIVE_FOLDER_ID)
           FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep "Uploaded" | awk '{print $2}')
           DRIVE_LINK="https://drive.google.com/file/d/$FILE_ID/view"
@@ -159,10 +168,18 @@ workflows:
           echo "✅ APK uploaded to Google Drive: $DRIVE_LINK"
       - name: Send Slack notification
         script: |
+          # Check if Slack webhook is configured
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "⚠️ SLACK_WEBHOOK_URL not configured, skipping Slack notification"
+            echo "💡 To enable Slack notifications, add SLACK_WEBHOOK_URL to slack_credentials environment group"
+            exit 0
+          fi
+          
           APK_PATH="build/app/outputs/flutter-apk/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk"
           SIZE=$(stat -f%z "$APK_PATH" 2>/dev/null || stat -c%s "$APK_PATH" 2>/dev/null)
           SIZE_MB=$(($SIZE/1024/1024))
           
+          echo "📤 Sending Slack notification..."
           curl -X POST -H 'Content-type: application/json' \
             --data "{
               \"text\": \"🚀 *Flutter Code Magic Android Build Completed*\",
@@ -199,7 +216,7 @@ workflows:
                   \"type\": \"section\",
                   \"text\": {
                     \"type\": \"mrkdwn\",
-                    \"text\": \"📁 *Google Drive:* <$DRIVE_LINK|Download APK>\\n📱 *File:* flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk\"
+                    \"text\": \"📁 *Google Drive:* ${DRIVE_LINK:-Not configured}\\n📱 *File:* flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk\"
                   }
                 }
               ]
@@ -335,6 +352,13 @@ workflows:
           done
       - name: Send Slack notification
         script: |
+          # Check if Slack webhook is configured
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "⚠️ SLACK_WEBHOOK_URL not configured, skipping Slack notification"
+            echo "💡 To enable Slack notifications, add SLACK_WEBHOOK_URL to slack_credentials environment group"
+            exit 0
+          fi
+          
           IPA_PATH="build/ios/ipa/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa"
           SIZE=$(stat -f%z "$IPA_PATH" 2>/dev/null || stat -c%s "$IPA_PATH" 2>/dev/null)
           SIZE_MB=$(($SIZE/1024/1024))
@@ -344,6 +368,7 @@ workflows:
             DIAWI_TEXT="📲 *Diawi Link:* <$DIAWI_LINK|Install on Device>\\n"
           fi
           
+          echo "📤 Sending Slack notification..."
           curl -X POST -H 'Content-type: application/json' \
             --data "{
               \"text\": \"🚀 *Flutter Code Magic iOS Build Completed*\",
@@ -473,10 +498,18 @@ workflows:
           gdrive files upload build/flutter_code_magic_web_v${VERSION_NAME}+${VERSION_CODE}.tar.gz --parent $GOOGLE_DRIVE_FOLDER_ID
       - name: Send Slack notification
         script: |
+          # Check if Slack webhook is configured
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "⚠️ SLACK_WEBHOOK_URL not configured, skipping Slack notification"
+            echo "💡 To enable Slack notifications, add SLACK_WEBHOOK_URL to slack_credentials environment group"
+            exit 0
+          fi
+          
           WEB_PATH="build/flutter_code_magic_web_v${VERSION_NAME}+${VERSION_CODE}.tar.gz"
           SIZE=$(stat -f%z "$WEB_PATH" 2>/dev/null || stat -c%s "$WEB_PATH" 2>/dev/null)
           SIZE_MB=$(($SIZE/1024/1024))
           
+          echo "📤 Sending Slack notification..."
           curl -X POST -H 'Content-type: application/json' \
             --data "{
               \"text\": \"🚀 *Flutter Code Magic Web Build Completed*\",
