@@ -67,7 +67,16 @@ workflows:
           echo "flutter.versionCode=$VERSION_CODE" >> $CM_BUILD_DIR/android/local.properties
       - name: Get Flutter packages
         script: |
-          flutter packages pub get
+          echo "🔧 Getting Flutter packages..."
+          flutter pub get
+          echo "✅ Flutter packages complete"
+      - name: Check Android setup
+        script: |
+          echo "🔍 Checking Android SDK setup..."
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+          ls -la $ANDROID_HOME/build-tools/ || echo "No build-tools found"
+          ls -la $ANDROID_HOME/platforms/ || echo "No platforms found"
       - name: Flutter analyze
         script: |
           flutter analyze
@@ -80,15 +89,39 @@ workflows:
           flutter clean
           flutter pub get
           
-          # Build with debug mode (no signing required)
-          flutter build apk --debug --verbose
+          # Check Flutter doctor
+          flutter doctor -v
           
-          # If debug fails, the build will stop here
+          # Try building APK with release mode but debug signing
+          echo "Building APK..."
+          flutter build apk --release --debug
+          
+          # If that fails, try debug mode
+          if [ $? -ne 0 ]; then
+            echo "Release build failed, trying debug mode..."
+            flutter build apk --debug
+          fi
+          
+          # Check what APK was created
+          ls -la build/app/outputs/flutter-apk/
+          
+          # Find the APK file (could be app-debug.apk or app-release.apk)
+          if [ -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
+            echo "Found app-release.apk"
+            echo "APK_NAME=app-release.apk" >> $CM_ENV
+          elif [ -f "build/app/outputs/flutter-apk/app-debug.apk" ]; then
+            echo "Found app-debug.apk"
+            echo "APK_NAME=app-debug.apk" >> $CM_ENV
+          else
+            echo "No APK found!"
+            exit 1
+          fi
       - name: Rename APK
         script: |
           cd build/app/outputs/flutter-apk
-          # Debug builds create app-debug.apk instead of app-release.apk
-          mv app-debug.apk flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk
+          # Use the APK name detected in previous step
+          mv $APK_NAME flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk
+          echo "✅ Renamed $APK_NAME to flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk"
       - name: Test APK (Basic validation)
         script: |
           APK_PATH="build/app/outputs/flutter-apk/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk"
