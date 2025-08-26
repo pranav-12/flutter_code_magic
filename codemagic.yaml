@@ -92,7 +92,7 @@ workflows:
           
           # Build unsigned release APK with optimizations
           echo "Building optimized release APK..."
-          flutter build apk --release --target-platform android-arm64 --no-shrink --dart-define=flutter.inspector.structuredErrors=false
+          flutter build apk --release
           
           # If that fails, try without optimizations
           if [ $? -ne 0 ]; then
