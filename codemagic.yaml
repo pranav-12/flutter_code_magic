@@ -114,8 +114,12 @@ workflows:
           echo "$GOOGLE_DRIVE_SERVICE_ACCOUNT" > service-account.json
           gdrive account add --service-account service-account.json
           
-          # Upload APK
-          gdrive files upload build/app/outputs/flutter-apk/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk --parent $GOOGLE_DRIVE_FOLDER_ID
+          # Upload APK and get file ID
+          UPLOAD_OUTPUT=$(gdrive files upload build/app/outputs/flutter-apk/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk --parent $GOOGLE_DRIVE_FOLDER_ID)
+          FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep "Uploaded" | awk '{print $2}')
+          DRIVE_LINK="https://drive.google.com/file/d/$FILE_ID/view"
+          echo "DRIVE_LINK=$DRIVE_LINK" >> $CM_ENV
+          echo "✅ APK uploaded to Google Drive: $DRIVE_LINK"
       - name: Send Slack notification
         script: |
           APK_PATH="build/app/outputs/flutter-apk/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk"
@@ -158,7 +162,7 @@ workflows:
                   \"type\": \"section\",
                   \"text\": {
                     \"type\": \"mrkdwn\",
-                    \"text\": \"📁 *Google Drive:* APK uploaded successfully\\n📱 *File:* flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk\"
+                    \"text\": \"📁 *Google Drive:* <$DRIVE_LINK|Download APK>\\n📱 *File:* flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk\"
                   }
                 }
               ]
@@ -257,8 +261,12 @@ workflows:
           echo "$GOOGLE_DRIVE_SERVICE_ACCOUNT" > service-account.json
           gdrive account add --service-account service-account.json
           
-          # Upload IPA
-          gdrive files upload build/ios/ipa/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa --parent $GOOGLE_DRIVE_FOLDER_ID
+          # Upload IPA and get file ID
+          UPLOAD_OUTPUT=$(gdrive files upload build/ios/ipa/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa --parent $GOOGLE_DRIVE_FOLDER_ID)
+          FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep "Uploaded" | awk '{print $2}')
+          DRIVE_LINK="https://drive.google.com/file/d/$FILE_ID/view"
+          echo "DRIVE_LINK=$DRIVE_LINK" >> $CM_ENV
+          echo "✅ IPA uploaded to Google Drive: $DRIVE_LINK"
       - name: Upload to Diawi
         script: |
           IPA_PATH="build/ios/ipa/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa"
@@ -331,7 +339,7 @@ workflows:
                   \"type\": \"section\",
                   \"text\": {
                     \"type\": \"mrkdwn\",
-                    \"text\": \"📁 *Google Drive:* IPA uploaded successfully\\n${DIAWI_TEXT}📱 *File:* flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa\"
+                    \"text\": \"📁 *Google Drive:* <$DRIVE_LINK|Download IPA>\\n${DIAWI_TEXT}📱 *File:* flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.ipa\"
                   }
                 }
               ]
