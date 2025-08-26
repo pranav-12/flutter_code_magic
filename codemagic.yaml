@@ -67,9 +67,19 @@ workflows:
           echo "flutter.versionCode=$VERSION_CODE" >> $CM_BUILD_DIR/android/local.properties
       - name: Build APK
         script: |
-          flutter build apk --release
+          # Pre-warm Gradle cache for faster builds
+          cd android && ./gradlew help --daemon
+          cd ..
+          
+          # Build with maximum optimization flags
+          flutter build apk --release \
+            --no-tree-shake-icons \
+            --target-platform android-arm64 \
+            --split-per-abi
+          
+          # Use the arm64 APK (smallest and fastest)
           cd build/app/outputs/flutter-apk
-          mv app-release.apk flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk
+          mv app-arm64-v8a-release.apk flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk
       - name: Upload to Google Drive
         script: |
           # Check if Google Drive is configured
