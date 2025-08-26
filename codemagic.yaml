@@ -90,14 +90,17 @@ workflows:
             gdrive account add --service-account service-account.json
             
             echo "📤 Uploading $ZIP_FILE to Google Drive..."
-            UPLOAD_OUTPUT=$(gdrive files upload "$ZIP_FILE" --parent "$GOOGLE_DRIVE_FOLDER_ID" 2>&1)
+            UPLOAD_OUTPUT=$(gdrive files upload "$ZIP_FILE" --parent "$GOOGLE_DRIVE_FOLDER_ID" --share 2>&1)
             echo "Upload result: $UPLOAD_OUTPUT"
             
             # Extract file ID for direct download link
             FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep -o 'Id: [^[:space:]]*' | cut -d' ' -f2 | head -1)
             if [ -n "$FILE_ID" ]; then
-              echo "DRIVE_LINK=https://drive.google.com/file/d/$FILE_ID/view" >> $CM_ENV
-              echo "✅ Android ZIP uploaded: $FILE_ID"
+              # Make file publicly accessible
+              gdrive files share "$FILE_ID" --type anyone --role reader
+              echo "DRIVE_LINK=https://drive.google.com/uc?export=download&id=$FILE_ID" >> $CM_ENV
+              echo "✅ Android ZIP uploaded and shared: $FILE_ID"
+              echo "📥 Direct download: https://drive.google.com/uc?export=download&id=$FILE_ID"
             else
               echo "DRIVE_LINK=https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID" >> $CM_ENV
               echo "✅ Android ZIP uploaded (using folder link)"
@@ -186,14 +189,17 @@ workflows:
             gdrive account add --service-account service-account.json
             
             echo "📤 Uploading $ZIP_FILE to Google Drive..."
-            UPLOAD_OUTPUT=$(gdrive files upload "$ZIP_FILE" --parent "$GOOGLE_DRIVE_FOLDER_ID" 2>&1)
+            UPLOAD_OUTPUT=$(gdrive files upload "$ZIP_FILE" --parent "$GOOGLE_DRIVE_FOLDER_ID" --share 2>&1)
             echo "Upload result: $UPLOAD_OUTPUT"
             
             # Extract file ID for direct download link
             FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep -o 'Id: [^[:space:]]*' | cut -d' ' -f2 | head -1)
             if [ -n "$FILE_ID" ]; then
-              echo "DRIVE_LINK=https://drive.google.com/file/d/$FILE_ID/view" >> $CM_ENV
-              echo "✅ iOS ZIP uploaded: $FILE_ID"
+              # Make file publicly accessible
+              gdrive files share "$FILE_ID" --type anyone --role reader
+              echo "DRIVE_LINK=https://drive.google.com/uc?export=download&id=$FILE_ID" >> $CM_ENV
+              echo "✅ iOS ZIP uploaded and shared: $FILE_ID"
+              echo "📥 Direct download: https://drive.google.com/uc?export=download&id=$FILE_ID"
             else
               echo "DRIVE_LINK=https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID" >> $CM_ENV
               echo "✅ iOS ZIP uploaded (using folder link)"
@@ -307,14 +313,17 @@ workflows:
             gdrive account add --service-account service-account.json
             
             echo "📤 Uploading build/$ZIP_FILE to Google Drive..."
-            UPLOAD_OUTPUT=$(gdrive files upload "build/$ZIP_FILE" --parent "$GOOGLE_DRIVE_FOLDER_ID" 2>&1)
+            UPLOAD_OUTPUT=$(gdrive files upload "build/$ZIP_FILE" --parent "$GOOGLE_DRIVE_FOLDER_ID" --share 2>&1)
             echo "Upload result: $UPLOAD_OUTPUT"
             
             # Extract file ID for direct download link
             FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep -o 'Id: [^[:space:]]*' | cut -d' ' -f2 | head -1)
             if [ -n "$FILE_ID" ]; then
-              echo "DRIVE_LINK=https://drive.google.com/file/d/$FILE_ID/view" >> $CM_ENV
-              echo "✅ Web ZIP uploaded: $FILE_ID"
+              # Make file publicly accessible
+              gdrive files share "$FILE_ID" --type anyone --role reader
+              echo "DRIVE_LINK=https://drive.google.com/uc?export=download&id=$FILE_ID" >> $CM_ENV
+              echo "✅ Web ZIP uploaded and shared: $FILE_ID"
+              echo "📥 Direct download: https://drive.google.com/uc?export=download&id=$FILE_ID"
             else
               echo "DRIVE_LINK=https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID" >> $CM_ENV
               echo "✅ Web ZIP uploaded (using folder link)"
