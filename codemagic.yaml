@@ -67,33 +67,9 @@ workflows:
           echo "flutter.versionCode=$VERSION_CODE" >> $CM_BUILD_DIR/android/local.properties
       - name: Build APK
         script: |
-          # Skip flutter clean to save time (only clean if necessary)
-          echo "⚡ Fast APK build starting..."
-          
-          # Build unsigned release APK with optimizations
-          echo "Building optimized release APK..."
           flutter build apk --release
- 
-          # Check what APK was created
-          ls -la build/app/outputs/flutter-apk/
-          
-          # Find the APK file (could be app-debug.apk or app-release.apk)
-          if [ -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
-            echo "Found app-release.apk"
-            echo "APK_NAME=app-release.apk" >> $CM_ENV
-          elif [ -f "build/app/outputs/flutter-apk/app-debug.apk" ]; then
-            echo "Found app-debug.apk"
-            echo "APK_NAME=app-debug.apk" >> $CM_ENV
-          else
-            echo "No APK found!"
-            exit 1
-          fi
-      - name: Rename APK
-        script: |
           cd build/app/outputs/flutter-apk
-          # Use the APK name detected in previous step
-          mv $APK_NAME flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk
-          echo "✅ Renamed $APK_NAME to flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk"
+          mv app-release.apk flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk
       - name: Upload to Google Drive
         script: |
           # Check if Google Drive is configured
@@ -108,30 +84,12 @@ workflows:
           curl -L https://github.com/gdrive-org/gdrive/releases/download/2.1.1/gdrive_2.1.1_darwin_amd64.tar.gz | tar xz
           sudo mv gdrive /usr/local/bin/
           
-          # Authenticate with service account
+          # Authenticate and upload
           echo "$GOOGLE_DRIVE_SERVICE_ACCOUNT" > service-account.json
           gdrive account add --service-account service-account.json
+          gdrive files upload "build/app/outputs/flutter-apk/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk" --parent "$GOOGLE_DRIVE_FOLDER_ID"
           
-          # Upload APK and get file ID
-          echo "📤 Uploading APK to Google Drive..."
-          APK_FILE="build/app/outputs/flutter-apk/flutter_code_magic_v${VERSION_NAME}+${VERSION_CODE}.apk"
-          
-          # Upload file and capture output properly
-          UPLOAD_OUTPUT=$(gdrive files upload "$APK_FILE" --parent "$GOOGLE_DRIVE_FOLDER_ID" 2>&1)
-          echo "Upload output: $UPLOAD_OUTPUT"
-          
-          # Extract file ID from gdrive output (format may vary)
-          FILE_ID=$(echo "$UPLOAD_OUTPUT" | grep -E "Id:|Uploaded" | sed 's/.*Id: *//; s/.*Uploaded *//; s/ .*//' | head -1)
-          
-          if [ -n "$FILE_ID" ] && [ "$FILE_ID" != "" ]; then
-            DRIVE_LINK="https://drive.google.com/file/d/$FILE_ID/view"
-            echo "DRIVE_LINK=$DRIVE_LINK" >> $CM_ENV
-            echo "✅ APK uploaded to Google Drive: $DRIVE_LINK"
-          else
-            echo "⚠️ Could not extract file ID from gdrive output"
-            echo "DRIVE_LINK=https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID" >> $CM_ENV
-            echo "✅ APK uploaded to Google Drive folder: https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID"
-          fi
+          echo "DRIVE_LINK=https://drive.google.com/drive/folders/$GOOGLE_DRIVE_FOLDER_ID" >> $CM_ENV
       - name: Send Slack notification
         script: |
           # Check if Slack webhook is configured
@@ -145,10 +103,6 @@ workflows:
           SIZE=$(stat -f%z "$APK_PATH" 2>/dev/null || stat -c%s "$APK_PATH" 2>/dev/null)
           SIZE_MB=$(($SIZE/1024/1024))
           
-          # Debug: Check webhook URL
-          echo "📤 Sending Slack notification to: ${SLACK_WEBHOOK_URL:0:50}..."
-          
-          # Send Slack notification with proper URL handling
           curl -X POST -H 'Content-type: application/json' \
             --data "{
               \"text\": \"🚀 *Flutter Code Magic Android Build Completed*\",
@@ -191,8 +145,6 @@ workflows:
               ]
             }" \
             "$SLACK_WEBHOOK_URL"
-          
-          echo "✅ Slack notification sent"
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
 
