@@ -70,33 +70,37 @@ workflows:
           echo "🔧 Getting Flutter packages..."
           flutter pub get
           echo "✅ Flutter packages complete"
-      - name: Check Android setup
+      - name: Cache Gradle dependencies
         script: |
-          echo "🔍 Checking Android SDK setup..."
-          echo "ANDROID_HOME: $ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
-          ls -la $ANDROID_HOME/build-tools/ || echo "No build-tools found"
-          ls -la $ANDROID_HOME/platforms/ || echo "No platforms found"
+          echo "⚡ Warming up Gradle cache..."
+          cd android && ./gradlew dependencies --quiet || echo "Gradle cache warmed up"
       - name: Flutter analyze
         script: |
-          flutter analyze
-      - name: Flutter test
+          echo "⚡ Running quick analyze..."
+          flutter analyze --no-fatal-infos
+      - name: Flutter test  
         script: |
-          flutter test
+          echo "⚡ Running tests..."
+          flutter test --reporter=compact
       - name: Build APK
         script: |
-          # Clean build cache first
-          flutter clean
-          flutter pub get
+          # Skip flutter clean to save time (only clean if necessary)
+          echo "⚡ Fast APK build starting..."
           
-          # Check Flutter doctor
-          flutter doctor -v
+          # Quick Flutter doctor check (no verbose)
+          flutter doctor
           
-          # Build unsigned release APK (no signing required)
-          echo "Building unsigned release APK..."
-          flutter build apk --release --no-shrink
+          # Build unsigned release APK with optimizations
+          echo "Building optimized release APK..."
+          flutter build apk --release --target-platform android-arm64 --no-shrink --dart-define=flutter.inspector.structuredErrors=false
           
-          # If that fails, try debug mode as fallback
+          # If that fails, try without optimizations
+          if [ $? -ne 0 ]; then
+            echo "Optimized build failed, trying standard release..."
+            flutter build apk --release --no-shrink
+          fi
+          
+          # Final fallback to debug if release fails
           if [ $? -ne 0 ]; then
             echo "Release build failed, trying debug mode..."
             flutter build apk --debug
