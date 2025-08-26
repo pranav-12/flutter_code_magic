@@ -24,7 +24,7 @@ workflows:
   # ANDROID BUILD WORKFLOW
   android-workflow:
     name: Android Build
-    instance_type: mac_mini_m1
+    instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
       groups:
@@ -207,7 +207,7 @@ workflows:
   # iOS BUILD WORKFLOW
   ios-workflow:
     name: iOS Build
-    instance_type: mac_mini_m1
+    instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
       groups:
@@ -388,7 +388,7 @@ workflows:
   # WEB BUILD WORKFLOW
   web-workflow:
     name: Web Build
-    instance_type: mac_mini_m1
+    instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
       groups:
@@ -521,7 +521,7 @@ workflows:
   # COMBINED BUILD WORKFLOW (All platforms)
   all-platforms:
     name: Build All Platforms
-    instance_type: mac_mini_m1
+    instance_type: mac_mini_m2
     max_build_duration: 120
     environment:
       groups:
