@@ -1,17 +1,8 @@
 # Codemagic Configuration for Flutter Code Magic
 # Documentation: https://docs.codemagic.io/
 #
-# REQUIRED ENVIRONMENT VARIABLES:
-# 
-# google_credentials group:
-#   - GOOGLE_DRIVE_SERVICE_ACCOUNT: Your Google service account JSON
-#   - GOOGLE_DRIVE_FOLDER_ID: 1GNT1C0eOcg0hgsxr6lqIKx-LwZK77BBF
-#
-# slack_credentials group:  
-#   - SLACK_WEBHOOK_URL: https://hooks.slack.com/services/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
-#
-# diawi_credentials group:
-#   - DIAWI_TOKEN: W628xkAOs8aRELyJlllM9ouhcaEYymIIM3O9i2Wpj2
+# 📋 CREDENTIALS: See CREDENTIALS_CHECKLIST.md for all required environment variables
+# 🔧 SETUP: Configure environment groups in Codemagic dashboard before running builds
 
 workflows:
   # ANDROID BUILD WORKFLOW
