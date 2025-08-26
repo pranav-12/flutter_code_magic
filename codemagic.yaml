@@ -177,9 +177,6 @@ workflows:
     instance_type: mac_mini_m1
     max_build_duration: 60
     environment:
-      ios_signing:
-        distribution_type: adhoc  # Change to 'app_store' for App Store builds
-        bundle_identifier: com.example.flutterCodeMagic
       groups:
         - google_credentials  # Optional: for Google Drive uploads
         - slack_credentials   # Optional: for Slack notifications
@@ -485,11 +482,6 @@ workflows:
     instance_type: mac_mini_m1
     max_build_duration: 120
     environment:
-      android_signing:
-        - flutter_code_magic_keystore  # Update with your actual keystore name
-      ios_signing:
-        distribution_type: adhoc
-        bundle_identifier: com.example.flutterCodeMagic
       groups:
         - google_credentials  # Optional
         - slack_credentials   # Optional
